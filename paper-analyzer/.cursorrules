@@ -1,0 +1,68 @@
+# Research Paper Analyzer - Cursor Rules
+
+## Project Overview
+AI-powered research paper analysis system using AWS Bedrock (DeepSeek), LangChain, FastAPI, and Next.js.
+
+## Technology Stack
+- **Backend**: Python 3.10+ / FastAPI / LangChain / AWS Bedrock (DeepSeek)
+- **Frontend**: Next.js 14 / React 18 / TypeScript / Tailwind CSS
+- **AI Model**: AWS Bedrock - DeepSeek v3
+- **PDF Processing**: PyMuPDF
+- **Data Fetching**: TanStack React Query
+
+## Port Configuration
+⚠️ **RANDOM PORTS** - Not the standard 8000/3000!
+
+- **Backend API**: Random port (e.g., 8734, 9123, 8888, etc.)
+- **Frontend**: Random port (e.g., 3847, 4567, 3999, etc.)
+- **Why**: To avoid conflicts and prove the system works on any port
+- **Configuration**: Ports set via environment variables and startup scripts
+
+## Backend (.env)
+```bash
+API_PORT=8734  # RANDOM PORT - Change as needed
+```
+
+## Frontend (.env.local)
+```bash
+NEXT_PUBLIC_API_URL=http://localhost:8734  # Must match backend port
+```
+
+## Important Files
+- `backend/api/app.py` - Main FastAPI application
+- `backend/extractors/llm_client.py` - AWS Bedrock + LangChain integration
+- `frontend/app/page.tsx` - Main application UI
+- `backend/config.py` - Configuration management
+
+## AWS Bedrock Requirements
+- AWS credentials in `backend/.env`
+- Bedrock access enabled in AWS Console
+- DeepSeek model access requested and approved
+
+## Development Workflow
+1. Backend runs on random port (e.g., 8734)
+2. Frontend runs on random port (e.g., 3847)
+3. Frontend configured to call backend's random port
+4. Both can run simultaneously without conflicts
+
+## Key Features
+- PDF upload and parsing
+- AI-powered contribution extraction
+- AI-powered experiment extraction
+- Intelligent caching
+- Beautiful modern UI
+- RESTful API with Swagger docs
+
+## Code Style
+- **Python**: Type hints, async/await, Pydantic models
+- **TypeScript**: Strict mode, full type safety
+- **React**: Functional components, hooks, Server/Client components
+- **Tailwind**: Utility-first CSS
+
+## Testing Ports
+Always check what ports the servers are actually running on:
+- Backend: Look for "Uvicorn running on http://0.0.0.0:XXXX"
+- Frontend: Look for "Local: http://localhost:XXXX"
+
+## API Documentation
+When backend is running, visit: http://localhost:{BACKEND_PORT}/docs
