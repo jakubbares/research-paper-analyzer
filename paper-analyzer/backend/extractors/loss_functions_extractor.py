@@ -95,3 +95,4 @@ Paper Content:
         print(f"✅ Found {len(loss_functions)} loss functions")
         return loss_functions
 
+

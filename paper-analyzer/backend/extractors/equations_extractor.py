@@ -95,3 +95,4 @@ Paper Content:
         print(f"✅ Found {len(equations)} equations")
         return equations
 
+

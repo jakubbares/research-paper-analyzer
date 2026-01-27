@@ -262,3 +262,4 @@ You'll see:
 
 Run: `./setup-aws-bedrock.sh` or follow Option 1 for manual setup.
 
+

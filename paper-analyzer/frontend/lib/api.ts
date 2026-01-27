@@ -179,6 +179,18 @@ export const paperApi = {
     return response.data;
   },
 
+  // Generate dynamic visualization
+  generateVisualization: async (
+    paperIds: string[], 
+    query: string
+  ): Promise<{ html: string; paper_count: number; query: string }> => {
+    const response = await api.post('/api/visualize', { 
+      paper_ids: paperIds, 
+      query 
+    });
+    return response.data;
+  },
+
   // Health check
   healthCheck: async (): Promise<{ status: string; llm: string }> => {
     const response = await api.get('/health');

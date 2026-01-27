@@ -291,6 +291,13 @@ class QueryResponse(BaseModel):
     result: str
 
 
+class VisualizeRequest(BaseModel):
+    """Request model for dynamic visualization generation"""
+    paper_ids: List[str]
+    query: str
+    extractors: Optional[List[str]] = None  # Auto-detect if not provided
+
+
 # ============================================================================
 # Helper Functions
 # ============================================================================
@@ -1165,6 +1172,127 @@ async def extract_claims(paper_id: str) -> Dict[str, Any]:
         return {"paper_id": paper_id, "claims": [c.to_dict() for c in claims], "cached": False}
     except Exception as e:
         raise HTTPException(500, f"Extraction failed: {str(e)}")
+
+
+# ============================================================================
+# Dynamic Visualization Generation
+# ============================================================================
+
+@app.post("/api/visualize")
+async def generate_visualization(request: VisualizeRequest) -> Dict[str, Any]:
+    """
+    Generate dynamic HTML visualization based on user query.
+    
+    Takes multiple paper IDs, collects their extracted data,
+    and asks the LLM to generate a custom HTML visualization.
+    """
+    # 1. Collect extracted data from all papers
+    all_data = {}
+    for paper_id in request.paper_ids:
+        paper_data = load_parsed_paper(paper_id)
+        if not paper_data:
+            continue
+        
+        # Load all available extractions
+        contributions = load_contributions(paper_id)
+        experiments = load_experiments(paper_id)
+        architectures = load_architectures(paper_id)
+        hyperparameters = load_hyperparameters(paper_id)
+        ablations = load_ablations(paper_id)
+        baselines = load_baselines(paper_id)
+        datasets = load_datasets(paper_id)
+        limitations = load_limitations(paper_id)
+        future_work = load_future_work(paper_id)
+        
+        all_data[paper_id] = {
+            "paper": {
+                "title": paper_data.get("title", "Unknown"),
+                "authors": paper_data.get("authors", []),
+                "abstract": paper_data.get("abstract", "")[:500]  # Truncate for context
+            },
+            "contributions": [c.to_dict() if hasattr(c, 'to_dict') else c for c in (contributions or [])],
+            "experiments": [e.to_dict() if hasattr(e, 'to_dict') else e for e in (experiments or [])],
+            "architectures": [a.to_dict() if hasattr(a, 'to_dict') else a for a in (architectures or [])],
+            "hyperparameters": [h.to_dict() if hasattr(h, 'to_dict') else h for h in (hyperparameters or [])],
+            "ablations": [a.to_dict() if hasattr(a, 'to_dict') else a for a in (ablations or [])],
+            "baselines": [b.to_dict() if hasattr(b, 'to_dict') else b for b in (baselines or [])],
+            "datasets": [d.to_dict() if hasattr(d, 'to_dict') else d for d in (datasets or [])],
+            "limitations": [l.to_dict() if hasattr(l, 'to_dict') else l for l in (limitations or [])],
+            "future_work": [f.to_dict() if hasattr(f, 'to_dict') else f for f in (future_work or [])]
+        }
+    
+    if not all_data:
+        raise HTTPException(404, "No papers found with the provided IDs")
+    
+    # 2. Generate HTML via LLM
+    llm = get_llm_client()
+    
+    # Serialize data, truncating if too long
+    data_json = json.dumps(all_data, indent=2, ensure_ascii=False, default=str)
+    if len(data_json) > 50000:
+        data_json = data_json[:50000] + "\n... [truncated]"
+    
+    prompt = f"""You are a data visualization expert. Generate an HTML page that visualizes the following research paper data according to the user's query.
+
+USER QUERY: {request.query}
+
+DATA (from {len(all_data)} papers):
+{data_json}
+
+REQUIREMENTS:
+- Output ONLY valid HTML (no markdown, no explanation, no code fences)
+- Start with <!DOCTYPE html> and include complete HTML structure
+- Include inline CSS in a <style> tag in the <head>
+- Include inline JavaScript in a <script> tag at the end of <body> if needed
+- Make it visually clean and professional with a modern design
+- Use a cohesive color scheme (prefer dark theme with accent colors)
+- Include interactive elements where useful (collapsible sections, hover effects, click to expand)
+- The HTML must be completely self-contained with no external dependencies
+- For tables: use alternating row colors, proper headers, and good padding
+- For lists: use cards or grid layouts when showing multiple items
+- Include a title/header that reflects the query
+- If comparing papers, show paper titles prominently
+
+OUTPUT THE HTML NOW:"""
+
+    try:
+        html = llm.complete(prompt)
+    except Exception as e:
+        raise HTTPException(500, f"LLM generation failed: {str(e)}")
+    
+    # Clean up response (remove markdown code fences if present)
+    html = html.strip()
+    if html.startswith("```html"):
+        html = html[7:]
+    elif html.startswith("```"):
+        html = html[3:]
+    if html.endswith("```"):
+        html = html[:-3]
+    html = html.strip()
+    
+    # Ensure it starts with DOCTYPE or html tag
+    if not html.lower().startswith("<!doctype") and not html.lower().startswith("<html"):
+        # Wrap in basic HTML structure
+        html = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Visualization</title>
+    <style>
+        body {{ font-family: system-ui, -apple-system, sans-serif; padding: 20px; background: #1a1a2e; color: #eee; }}
+    </style>
+</head>
+<body>
+{html}
+</body>
+</html>"""
+    
+    return {
+        "html": html,
+        "paper_count": len(all_data),
+        "query": request.query
+    }
 
 
 @app.get("/api/papers/{paper_id}/export/contributions")
