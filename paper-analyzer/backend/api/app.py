@@ -14,6 +14,7 @@ from datetime import datetime
 
 from config import settings
 from parsers import PaperParser, ParsedPaper
+from visualization_engine import VisualizationEngine
 from extractors import (
     get_llm_client,
     ContributionExtractor,
@@ -1181,10 +1182,14 @@ async def extract_claims(paper_id: str) -> Dict[str, Any]:
 @app.post("/api/visualize")
 async def generate_visualization(request: VisualizeRequest) -> Dict[str, Any]:
     """
-    Generate dynamic HTML visualization based on user query.
+    Generate dynamic HTML visualization using the enhanced visualization engine.
     
-    Takes multiple paper IDs, collects their extracted data,
-    and asks the LLM to generate a custom HTML visualization.
+    Multi-stage pipeline:
+    1. Analyze query to understand intent
+    2. Generate best practices
+    3. Enhance query with specifics
+    4. Select relevant data intelligently
+    5. Generate optimized HTML
     """
     # 1. Collect extracted data from all papers
     all_data = {}
@@ -1203,12 +1208,20 @@ async def generate_visualization(request: VisualizeRequest) -> Dict[str, Any]:
         datasets = load_datasets(paper_id)
         limitations = load_limitations(paper_id)
         future_work = load_future_work(paper_id)
+        algorithms = load_algorithms(paper_id)
+        equations = load_equations(paper_id)
+        training = load_training(paper_id)
+        metrics = load_metrics(paper_id)
+        loss_functions = load_loss_functions(paper_id)
+        related_work = load_related_work(paper_id)
+        claims = load_claims(paper_id)
+        code_resources = load_code_resources(paper_id)
         
         all_data[paper_id] = {
             "paper": {
                 "title": paper_data.get("title", "Unknown"),
                 "authors": paper_data.get("authors", []),
-                "abstract": paper_data.get("abstract", "")[:500]  # Truncate for context
+                "abstract": paper_data.get("abstract", "")
             },
             "contributions": [c.to_dict() if hasattr(c, 'to_dict') else c for c in (contributions or [])],
             "experiments": [e.to_dict() if hasattr(e, 'to_dict') else e for e in (experiments or [])],
@@ -1218,80 +1231,36 @@ async def generate_visualization(request: VisualizeRequest) -> Dict[str, Any]:
             "baselines": [b.to_dict() if hasattr(b, 'to_dict') else b for b in (baselines or [])],
             "datasets": [d.to_dict() if hasattr(d, 'to_dict') else d for d in (datasets or [])],
             "limitations": [l.to_dict() if hasattr(l, 'to_dict') else l for l in (limitations or [])],
-            "future_work": [f.to_dict() if hasattr(f, 'to_dict') else f for f in (future_work or [])]
+            "future_work": [f.to_dict() if hasattr(f, 'to_dict') else f for f in (future_work or [])],
+            "algorithms": [a.to_dict() if hasattr(a, 'to_dict') else a for a in (algorithms or [])],
+            "equations": [e.to_dict() if hasattr(e, 'to_dict') else e for e in (equations or [])],
+            "training": [t.to_dict() if hasattr(t, 'to_dict') else t for t in (training or [])],
+            "metrics": [m.to_dict() if hasattr(m, 'to_dict') else m for m in (metrics or [])],
+            "loss_functions": [l.to_dict() if hasattr(l, 'to_dict') else l for l in (loss_functions or [])],
+            "related_work": [r.to_dict() if hasattr(r, 'to_dict') else r for r in (related_work or [])],
+            "claims": [c.to_dict() if hasattr(c, 'to_dict') else c for c in (claims or [])],
+            "code_resources": [c.to_dict() if hasattr(c, 'to_dict') else c for c in (code_resources or [])]
         }
     
     if not all_data:
         raise HTTPException(404, "No papers found with the provided IDs")
     
-    # 2. Generate HTML via LLM
+    # 2. Use enhanced visualization engine
     llm = get_llm_client()
+    engine = VisualizationEngine(llm)
     
-    # Serialize data, truncating if too long
-    data_json = json.dumps(all_data, indent=2, ensure_ascii=False, default=str)
-    if len(data_json) > 50000:
-        data_json = data_json[:50000] + "\n... [truncated]"
-    
-    prompt = f"""You are a data visualization expert. Generate an HTML page that visualizes the following research paper data according to the user's query.
-
-USER QUERY: {request.query}
-
-DATA (from {len(all_data)} papers):
-{data_json}
-
-REQUIREMENTS:
-- Output ONLY valid HTML (no markdown, no explanation, no code fences)
-- Start with <!DOCTYPE html> and include complete HTML structure
-- Include inline CSS in a <style> tag in the <head>
-- Include inline JavaScript in a <script> tag at the end of <body> if needed
-- Make it visually clean and professional with a modern design
-- Use a cohesive color scheme (prefer dark theme with accent colors)
-- Include interactive elements where useful (collapsible sections, hover effects, click to expand)
-- The HTML must be completely self-contained with no external dependencies
-- For tables: use alternating row colors, proper headers, and good padding
-- For lists: use cards or grid layouts when showing multiple items
-- Include a title/header that reflects the query
-- If comparing papers, show paper titles prominently
-
-OUTPUT THE HTML NOW:"""
-
     try:
-        html = llm.complete(prompt)
+        html, metadata = engine.generate_visualization(
+            paper_ids=request.paper_ids,
+            query=request.query,
+            all_raw_data=all_data
+        )
     except Exception as e:
-        raise HTTPException(500, f"LLM generation failed: {str(e)}")
-    
-    # Clean up response (remove markdown code fences if present)
-    html = html.strip()
-    if html.startswith("```html"):
-        html = html[7:]
-    elif html.startswith("```"):
-        html = html[3:]
-    if html.endswith("```"):
-        html = html[:-3]
-    html = html.strip()
-    
-    # Ensure it starts with DOCTYPE or html tag
-    if not html.lower().startswith("<!doctype") and not html.lower().startswith("<html"):
-        # Wrap in basic HTML structure
-        html = f"""<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Visualization</title>
-    <style>
-        body {{ font-family: system-ui, -apple-system, sans-serif; padding: 20px; background: #1a1a2e; color: #eee; }}
-    </style>
-</head>
-<body>
-{html}
-</body>
-</html>"""
+        raise HTTPException(500, f"Visualization generation failed: {str(e)}")
     
     return {
         "html": html,
-        "paper_count": len(all_data),
-        "query": request.query
+        "metadata": metadata
     }
 
 

@@ -40,13 +40,14 @@ class BedrockLLMClient:
             self.bedrock_runtime = None
             self.mock_mode = True
     
-    def complete(self, prompt: str, system_prompt: Optional[str] = None) -> str:
+    def complete(self, prompt: str, system_prompt: Optional[str] = None, max_tokens: int = 4096) -> str:
         """
         Get text completion from LLM
         
         Args:
             prompt: User prompt
             system_prompt: Optional system prompt
+            max_tokens: Maximum tokens to generate
             
         Returns:
             LLM response as string
@@ -55,7 +56,7 @@ class BedrockLLMClient:
             return self._mock_response(prompt)
         
         try:
-            print(f"🔍 Calling {settings.bedrock_model_id[:40]}...")
+            print(f"🔍 Calling {settings.bedrock_model_id[:40]}... (max_tokens={max_tokens})")
             
             # Detect model type from ID
             model_id = settings.bedrock_model_id
@@ -64,7 +65,7 @@ class BedrockLLMClient:
                 # Anthropic Claude format
                 request_body = {
                     "anthropic_version": "bedrock-2023-05-31",
-                    "max_tokens": settings.bedrock_max_tokens,
+                    "max_tokens": max_tokens,
                     "temperature": settings.bedrock_model_temperature,
                     "messages": [
                         {
@@ -84,12 +85,12 @@ class BedrockLLMClient:
                 request_body = {
                     "prompt": full_prompt,
                     "temperature": settings.bedrock_model_temperature,
-                    "max_gen_len": settings.bedrock_max_tokens,
+                    "max_gen_len": max_tokens,
                 }
             else:
                 # Generic format - try Anthropic style
                 request_body = {
-                    "max_tokens": settings.bedrock_max_tokens,
+                    "max_tokens": max_tokens,
                     "temperature": settings.bedrock_model_temperature,
                     "messages": [{"role": "user", "content": prompt}]
                 }
@@ -159,13 +160,14 @@ class BedrockLLMClient:
             self.mock_mode = True
             return self._mock_response(prompt)
     
-    def complete_json(self, prompt: str, system_prompt: Optional[str] = None) -> Dict[str, Any]:
+    def complete_json(self, prompt: str, system_prompt: Optional[str] = None, max_tokens: int = 4096) -> Dict[str, Any]:
         """
         Get JSON completion from LLM
         
         Args:
             prompt: User prompt (should instruct to output JSON)
             system_prompt: Optional system prompt
+            max_tokens: Maximum tokens to generate
             
         Returns:
             Parsed JSON as dictionary
@@ -184,7 +186,7 @@ Start directly with { or [ and end with } or ]."""
         if "output only" not in prompt.lower():
             prompt = f"{prompt}\n\nIMPORTANT: Output ONLY valid JSON. No markdown, no explanations."
         
-        response_text = self.complete(prompt, system_prompt)
+        response_text = self.complete(prompt, system_prompt, max_tokens=max_tokens)
         
         # Clean response
         response_text = self._clean_json_response(response_text)

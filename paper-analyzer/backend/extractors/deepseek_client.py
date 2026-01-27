@@ -3,7 +3,7 @@ DeepSeek LLM Client - Works with payment issues!
 """
 import json
 import requests
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, Iterator
 
 
 class DeepSeekClient:
@@ -18,13 +18,14 @@ class DeepSeekClient:
         
         print(f"✅ DeepSeek client initialized!")
     
-    def complete(self, prompt: str, system_prompt: Optional[str] = None) -> str:
+    def complete(self, prompt: str, system_prompt: Optional[str] = None, max_tokens: int = 4096) -> str:
         """
         Get text completion from DeepSeek
         
         Args:
             prompt: User prompt
             system_prompt: Optional system prompt
+            max_tokens: Maximum tokens to generate (default 4096)
             
         Returns:
             LLM response as string
@@ -44,10 +45,10 @@ class DeepSeekClient:
                 json={
                     "model": self.model,
                     "messages": messages,
-                    "max_tokens": 4096,
+                    "max_tokens": max_tokens,
                     "temperature": 0.1
                 },
-                timeout=60
+                timeout=120  # Increased timeout for large responses
             )
             
             response.raise_for_status()
@@ -59,13 +60,72 @@ class DeepSeekClient:
             print(f"❌ DeepSeek API Error: {e}")
             raise
     
-    def complete_json(self, prompt: str, system_prompt: Optional[str] = None) -> Dict[str, Any]:
+    def complete_streaming(self, prompt: str, system_prompt: Optional[str] = None, max_tokens: int = 16384) -> Iterator[str]:
+        """
+        Get streaming text completion from DeepSeek for LONG outputs
+        
+        Args:
+            prompt: User prompt
+            system_prompt: Optional system prompt
+            max_tokens: Maximum tokens to generate (default 16384 for massive HTML)
+            
+        Yields:
+            Chunks of text as they're generated
+        """
+        messages = []
+        if system_prompt:
+            messages.append({"role": "system", "content": system_prompt})
+        messages.append({"role": "user", "content": prompt})
+        
+        try:
+            response = requests.post(
+                self.api_url,
+                headers={
+                    "Content-Type": "application/json",
+                    "Authorization": f"Bearer {self.api_key}"
+                },
+                json={
+                    "model": self.model,
+                    "messages": messages,
+                    "max_tokens": max_tokens,
+                    "temperature": 0.1,
+                    "stream": True  # Enable streaming!
+                },
+                stream=True,
+                timeout=180  # Increased timeout for streaming
+            )
+            
+            response.raise_for_status()
+            
+            # Parse SSE stream
+            for line in response.iter_lines():
+                if line:
+                    line = line.decode('utf-8')
+                    if line.startswith('data: '):
+                        data_str = line[6:]  # Remove 'data: ' prefix
+                        if data_str == '[DONE]':
+                            break
+                        try:
+                            data = json.loads(data_str)
+                            if 'choices' in data and len(data['choices']) > 0:
+                                delta = data['choices'][0].get('delta', {})
+                                if 'content' in delta:
+                                    yield delta['content']
+                        except json.JSONDecodeError:
+                            continue
+            
+        except Exception as e:
+            print(f"❌ DeepSeek Streaming API Error: {e}")
+            raise
+    
+    def complete_json(self, prompt: str, system_prompt: Optional[str] = None, max_tokens: int = 4096) -> Dict[str, Any]:
         """
         Get JSON completion from DeepSeek
         
         Args:
             prompt: User prompt (should instruct to output JSON)
             system_prompt: Optional system prompt
+            max_tokens: Maximum tokens to generate
             
         Returns:
             Parsed JSON as dictionary
@@ -84,7 +144,7 @@ Start directly with { or [ and end with } or ]."""
         if "output only" not in prompt.lower():
             prompt = f"{prompt}\n\nIMPORTANT: Output ONLY valid JSON. No markdown, no explanations."
         
-        response_text = self.complete(prompt, system_prompt)
+        response_text = self.complete(prompt, system_prompt, max_tokens=max_tokens)
         
         # Clean response
         response_text = self._clean_json_response(response_text)

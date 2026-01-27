@@ -46,7 +46,7 @@ export function DynamicViewer({ paperIds, paperTitles = {} }: DynamicViewerProps
     }
   });
 
-  // Handle iframe resize based on content
+  // Handle iframe resize based on content - NO HEIGHT LIMIT!
   useEffect(() => {
     if (iframeRef.current && generatedHtml) {
       const iframe = iframeRef.current;
@@ -54,10 +54,12 @@ export function DynamicViewer({ paperIds, paperTitles = {} }: DynamicViewerProps
         try {
           const height = iframe.contentWindow?.document.body.scrollHeight;
           if (height && height > 100) {
-            iframe.style.height = `${Math.min(height + 50, 2000)}px`;
+            // NO LIMIT! Let it be as massive as it needs!
+            iframe.style.height = `${height + 100}px`;
           }
         } catch (e) {
-          // Cross-origin issues, ignore
+          // Fallback to large default
+          iframe.style.height = '3000px';
         }
       };
     }
@@ -201,13 +203,14 @@ export function DynamicViewer({ paperIds, paperTitles = {} }: DynamicViewerProps
             </div>
           </CardHeader>
           <CardContent className="p-0">
-            {/* Sandboxed iframe for safe HTML rendering */}
+            {/* Sandboxed iframe for safe HTML rendering - MASSIVE SIZE SUPPORT! */}
             <iframe
               ref={iframeRef}
               srcDoc={generatedHtml}
-              className="w-full min-h-[600px] border-0"
+              className="w-full min-h-[1000px] border-0"
               sandbox="allow-scripts allow-same-origin"
               title="Generated Visualization"
+              style={{ minHeight: '1000px' }}
             />
           </CardContent>
         </Card>

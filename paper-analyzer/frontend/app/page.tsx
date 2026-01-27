@@ -118,7 +118,7 @@ export default function Home() {
     }
   };
 
-  // Resize iframe
+  // Resize iframe to full content height (no limit!)
   useEffect(() => {
     if (iframeRef.current && generatedHtml) {
       const iframe = iframeRef.current;
@@ -126,9 +126,13 @@ export default function Home() {
         try {
           const height = iframe.contentWindow?.document.body.scrollHeight;
           if (height && height > 100) {
-            iframe.style.height = `${Math.min(height + 50, 2000)}px`;
+            // NO LIMIT - let it be as tall as it needs to be!
+            iframe.style.height = `${height + 100}px`;
           }
-        } catch (e) {}
+        } catch (e) {
+          // Fallback to large default
+          iframe.style.height = '3000px';
+        }
       };
     }
   }, [generatedHtml]);
@@ -372,14 +376,15 @@ export default function Home() {
           )}
         </div>
 
-        {/* Generated HTML */}
+        {/* Generated HTML - Full Height, No Limits! */}
         <div className="bg-white rounded-2xl overflow-hidden shadow-2xl shadow-purple-500/10">
           <iframe
             ref={iframeRef}
             srcDoc={generatedHtml}
-            className="w-full min-h-[700px] border-0"
+            className="w-full min-h-[1000px] border-0"
             sandbox="allow-scripts allow-same-origin"
             title="Generated Visualization"
+            style={{ minHeight: '1000px' }}
           />
         </div>
       </div>
